@@ -1,0 +1,888 @@
+---
+title: "Travel_Insurance"
+author: "Enigma"
+date: "7/19/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Defining the metric of success
+
+## Data Relevance
+
+The dataset can be sourced from here ("<https://www.kaggle.com/tejashvi14/travel-insurance-prediction-data/tasks>")
+
+
+
+## The glossary of the data is as follows:
+
+-   Age - Age Of The Customer
+
+-   Employment Type - The Sector In Which Customer Is Employed
+
+-   Graduate or not - Whether The Customer Is College Graduate Or Not
+
+-   Annual Income - The Yearly Income Of The Customer In Indian
+    Rupees[Rounded To Nearest 50 Thousand Rupees]
+
+-   Family Members - Number Of Members In Customer's Family
+
+-   Chronic Disease - Whether The Customer Suffers From Any Major
+    Disease Or Conditions Like Diabetes/High BP or Asthma,etc.
+
+-   Frequent Flyer - Derived Data Based On Customer's History Of Booking
+    Air Tickets On At least 4 Different Instances In The Last 2
+    Years[2017-2019].
+
+-   Ever Traveled Abroad- Has The Customer Ever Traveled To A Foreign
+    Country[Not Necessarily Using The Company's Services]
+
+-   Travel Insurance - Did The Customer Buy Travel Insurance Package
+    During Introductory Offering Held In The Year 2019.
+
+## Loading the libraries
+
+```{r loading libraries}
+library(e1071)
+library(Rtsne)
+library(FSelector)
+library(psych)
+library(ggplot2)
+library(tidyverse)
+library(CatEncoders)
+library(gridExtra)
+library(hrbrthemes)
+library(dplyr)
+library(rpart)
+library(rpart.plot)
+library(party)#function ctree
+library(caret)#classification and regression training
+library(MLmetrics)
+library(modelr)
+library(broom)
+library(superml)
+library(randomForest)
+library(ROSE)
+library(ParamHelpers)
+library(mlr)
+library(class)
+library(tidymodels)
+library(discrim)
+library(ramify)
+library(car)
+library(factoextra)
+library(NbClust)
+library(mclust)
+library(clustvarsel)
+library(dendextend)
+library(cluster)
+library(xgboost)
+```
+
+## Data Sourcing
+
+```{r loading the dataset}
+travel<- read.csv("C:/Users/NATE/Downloads/TravelInsurancePrediction.csv")
+head(travel)
+```
+
+## Checking the Data
+
+```{r dataset structure}
+#checking the structure of the dataset
+str(travel)
+```
+
+```{r dimensions}
+dim(travel)
+```
+
+```{r datatypes}
+sapply(travel,class)
+```
+
+## Perform Data Cleaning
+
+```{r Completeness}
+colSums(is.na(travel))
+```
+
+```{r Consistency}
+duplicates <- travel[duplicated(travel),]
+duplicates
+```
+
+```{r Accuracy}
+
+travel$X <- NULL
+
+travel$Employment.Type <- as.factor(travel$Employment.Type)
+
+travel$GraduateOrNot <- as.factor(travel$GraduateOrNot)
+
+
+travel$ChronicDiseases <- gsub(0,FALSE,travel$ChronicDiseases)
+travel$ChronicDiseases <- gsub(1,TRUE,travel$ChronicDiseases)
+travel$ChronicDiseases <- as.factor(travel$ChronicDiseases)
+
+travel$FrequentFlyer <- as.factor(travel$FrequentFlyer)
+
+travel$EverTravelledAbroad <- as.factor(travel$EverTravelledAbroad)
+
+
+travel$TravelInsurance <- gsub(0, FALSE,travel$TravelInsurance)
+travel$TravelInsurance <- gsub(1, TRUE,travel$TravelInsurance)
+travel$TravelInsurance <- as.factor(travel$TravelInsurance)
+```
+
+```{r}
+sapply(travel,class)
+```
+
+```{r exporting the cleaning dataset}
+write.csv(travel, "C:/Users/NATE/Downloads/travel_1.csv")
+```
+
+## Perform Exploratory Data Analysis (Univariate, Bi-variate & Multivariate)
+
+### Univariate Analysis
+
+```{r mode function}
+mode <- function(x){
+  uniqx <- unique(x)
+  uniqx[which.max(tabulate(match(x,uniqx)))]
+}
+```
+
+#### Numerical Columns
+
+##### Age
+
+```{r}
+# mean
+Age.describe <- describe(travel$Age)
+Age.describe
+
+# mode
+Age.mode <- mode(travel$Age)
+Age.mode
+
+# quantiles
+Age.quantiles <- quantile(travel$Age)
+Age.quantiles
+```
+
+```{r}
+# distribution
+age.boxplot <- ggplot(travel,aes(Age)) + 
+      geom_boxplot(outlier.color = "red")+
+      labs(title="Age Boxplot")
+age.histo <- ggplot(travel,aes(Age)) + 
+      geom_histogram()+
+      labs(title="Age Histogram")
+grid.arrange(age.boxplot,age.histo,nrow=1)
+
+```
+
+##### Income
+
+```{r}
+#mean
+Income.describe <- describe(travel$AnnualIncome)
+Income.describe
+
+#mode
+Income.mode <- mode(travel$AnnualIncome)
+Income.mode
+
+#quantiles
+Income.quantiles <- quantile(travel$AnnualIncome)
+Income.quantiles
+```
+
+```{r}
+#boxplot distibution
+ggplot(travel,aes(AnnualIncome)) + 
+  geom_boxplot(outlier.color = "red")+
+  labs(title="Annual Income Boxplot")
+```
+
+##### Family Members
+
+```{r}
+#mean
+Family.describe <- describe(travel$FamilyMembers)
+Family.describe
+
+#mode
+Family.mode <- mode(travel$FamilyMembers)
+Family.mode
+
+#quantiles
+Family.quantiles <- quantile(travel$FamilyMembers)
+Family.quantiles
+```
+
+```{r}
+#distribution
+ggplot(travel,aes(FamilyMembers)) + 
+  geom_boxplot(outlier.color = "red")+
+  labs(title="Family Members Boxplot")
+```
+
+#### Categorical Columns
+
+##### Frequent flyer
+
+```{r}
+#mode
+frequent.mode <- mode(travel$FrequentFlyer)
+frequent.mode
+```
+
+```{r}
+#bar plot
+frequent.barplot <- ggplot(travel,aes(FrequentFlyer)) + 
+  geom_bar(stat="count")+
+  labs(title="FrequentFlyer barplot")
+frequent.barplot
+```
+
+##### Employment Type
+
+```{r}
+#mode
+employment.mode <- mode(travel$Employment.Type)
+employment.mode
+```
+
+```{r}
+#bar plot
+employment.barplot <- ggplot(travel,aes(Employment.Type)) + 
+  geom_bar(stat="count")+
+  labs(title="Employment  barplot")
+employment.barplot
+```
+
+##### Ever Traveled Abroad
+
+```{r}
+#mode
+travel.mode <- mode(travel$EverTravelledAbroad)
+travel.mode
+```
+
+```{r}
+#bar plot
+travel.barplot <- ggplot(travel,aes(EverTravelledAbroad)) + 
+  geom_bar(stat="count")+
+  labs(title="Ever Travelled Abroad  barplot")
+travel.barplot
+```
+
+##### Employment Type
+
+```{r}
+#mode
+employment.mode <- mode(travel$Employment.Type)
+employment.mode
+```
+
+```{r}
+#bar plot
+employment.barplot <- ggplot(travel,aes(Employment.Type)) + 
+  geom_bar(stat="count")+
+  labs(title="Employment  barplot")
+employment.barplot
+```
+
+##### Graduate or not
+
+```{r}
+#mode
+graduate.mode <-mode(travel$GraduateOrNot)
+graduate.mode
+```
+
+```{r}
+#bar plot
+graduate.barplot <- ggplot(travel,aes(GraduateOrNot),fill=dose) + 
+  geom_bar(stat="count")+
+  labs(title="Graduate or Not  barplot") + theme_light()
+graduate.barplot
+```
+
+##### Travel Insurance
+
+```{r}
+#mode
+travel.mode <-mode(travel$TravelInsurance)
+travel.mode
+```
+
+```{r}
+#bar plot
+travel.barplot <- ggplot(travel,aes(TravelInsurance)) + 
+  geom_bar(stat="count")+
+  labs(title="Travel  barplot")
+travel.barplot
+```
+
+##### Chronic Diseases
+
+```{r}
+#mode
+chronic.mode <-mode(travel$ChronicDiseases)
+chronic.mode
+```
+
+```{r}
+#barplot
+chronic.barplot <- ggplot(travel,aes(ChronicDiseases)) + 
+  geom_bar(stat="count")+
+  labs(title="Chronic Diseases  barplot")
+chronic.barplot
+```
+
+### Bi-variate Analysis
+
+```{r Annual Income versus FrequentFlyer}
+
+
+sp <- ggplot(travel,aes(y=AnnualIncome,x=FrequentFlyer))+
+  geom_point()+labs(title="Annual Income versus FrequentFlyer")
+
+sp + scale_color_gradientn(colors=rainbow(5))
+```
+
+From our scatterplot we can see that the the people with a higher income
+are the ones who are most frequent flyers.
+
+```{r Age versus Insurance}
+ggplot(travel,aes(Age,fill=TravelInsurance,group=TravelInsurance))+
+  geom_density(adjust=1.5,alpha = 0.4)+labs(title="Insurance versus Age")+
+  theme_ipsum()
+```
+
+At 25, there are more people taking the cover. At 28, a lot more people
+opt not to take the cover. It could be attributed to the ending of
+parental insurance cover and since many people are starting families at
+this age they could choose to not take the cover(median age for first
+birth in India is 25- 49 years).
+
+```{r Annual Income and Age}
+df<- aggregate(AnnualIncome~Age,data=travel, mean)
+
+ggplot(data=df, aes(y=AnnualIncome,x=Age))+
+  geom_line()+
+  xlab(label="Age")+
+  ylab(label="Annual Income")+
+  labs(title="Age versus Income")
+```
+
+At 25 years they are paid more, with a sharp decline at 27 years it then
+fluctuates from 27 to 35 years
+
+```{r Family members versus insurance}
+ggplot(travel,aes(FamilyMembers,fill=TravelInsurance,group=TravelInsurance))+
+  geom_density(adjust=1.5,alpha = 0.4)+labs(title="Insurance versus Family Members")+
+  theme_ipsum()
+```
+
+For 2 and 3 family sizes, there are a roughly equal number of people
+taking and rejecting the cover. At 4, more people are not taking the
+insurance cover then around 5 to 9 more customers are taking the cover.
+
+```{r Employment Type versus Annual Income}
+ggplot(data=travel, aes(y=AnnualIncome,x=Employment.Type,fill=TravelInsurance))+
+  geom_bar(position="dodge",stat="identity")
+```
+
+In the government sector, there is an equal number of people taking and
+not taking the insurance cover whereas in the private sector people
+taking insurance are slightly higher than those not taking the cover.
+Moreover, those taking the insurance cover are also paid slightly more.
+
+```{r correlation table}
+cor(travel[, c(1, 4, 5)])
+```
+
+## Implementing the solution
+
+### Decision Tree
+
+```{r Undersample}
+# getting the number of observations in the higher class
+
+table(travel$TravelInsurance)
+
+# sampling using the value obtained 
+
+under.sample.d <- ovun.sample(TravelInsurance~., data = travel, method = "under", N =1420)$data
+table(under.sample.d$TravelInsurance)
+
+```
+
+```{r shuffling and splitting}
+
+set.seed(123)
+shuffle_index <- sample(1:nrow(travel))
+travel.d <- under.sample.d[shuffle_index, ]
+head(under.sample.d)
+
+
+# split
+set.seed(3456)
+ratio <- createDataPartition(under.sample.d$TravelInsurance, p=.8, list=FALSE)
+train.d <- under.sample.d[ratio, ]
+test.d <-under.sample.d[-ratio, ]
+labels.d <- test.d$TravelInsurance
+```
+
+```{r creating a baseline decision tree model}
+model <- rpart(TravelInsurance ~ .,
+               data = train.d,
+               method ='class'
+               )
+rpart.plot(model, extra = 106)
+```
+
+```{r}
+summary(model)
+```
+
+```{r}
+#making predictions
+pred.b <- predict(model,newdata = test.d[,-9])
+
+
+
+pred.classes <- ifelse(argmax(pred.b, row=TRUE)==1, FALSE, TRUE)
+pred.classes <- factor(pred.classes)
+
+# confusion matrix
+confusionMatrix(pred.classes,test.d$TravelInsurance, positive = "TRUE")
+
+```
+
+```{r Model Metrics}
+F1_Score(pred.classes,test.d$TravelInsurance)
+Precision(pred.classes, test.d$TravelInsurance)
+Recall(pred.classes, test.d$TravelInsurance)
+```
+
+The F1-score which should be a balance of both recall and precision is
+surprisingly high. However, the recall is relatively low.
+
+### Preprocessing
+
+```{r Label Encoding}
+travel$Employment.Type <- gsub("Government Sector", 0, travel$Employment.Type)
+travel$Employment.Type <- gsub("Private Sector/Self Employed", 1, travel$Employment.Type)
+travel$Employment.Type <- as.factor(travel$Employment.Type)
+
+travel$GraduateOrNot <- gsub("Yes", 0, travel$GraduateOrNot)
+travel$GraduateOrNot <- gsub("No", 1, travel$GraduateOrNot)
+travel$GraduateOrNot <- as.factor(travel$GraduateOrNot)
+
+travel$FrequentFlyer <- gsub("Yes", 1, travel$FrequentFlyer)
+travel$FrequentFlyer <- gsub("No", 0, travel$FrequentFlyer)
+travel$FrequentFlyer <- as.factor(travel$FrequentFlyer)
+
+travel$EverTravelledAbroad <- gsub("Yes", 1, travel$EverTravelledAbroad)
+travel$EverTravelledAbroad <- gsub("No", 0, travel$EverTravelledAbroad)
+travel$EverTravelledAbroad <- as.factor(travel$EverTravelledAbroad)
+
+# chronic disease
+travel$ChronicDiseases <- gsub(FALSE, 0, travel$ChronicDiseases)
+travel$ChronicDiseases <- gsub(TRUE, 1, travel$ChronicDiseases)
+travel$ChronicDiseases <- as.factor(travel$ChronicDiseases)
+
+# travel insurance
+travel$TravelInsurance <- gsub(FALSE, 0, travel$TravelInsurance)
+travel$TravelInsurance <- gsub(TRUE, 1, travel$TravelInsurance)
+travel$TravelInsurance <- as.factor(travel$TravelInsurance)
+```
+
+```{r undersample}
+# getting the number of observations in the higher class
+
+table(travel$TravelInsurance)
+
+# sampling using the value obtained 
+
+under.sample <- ovun.sample(TravelInsurance~., data = travel, method = "under", N =1420)$data
+table(under.sample$TravelInsurance)
+
+```
+
+```{r Normalization}
+# normalization function
+nor <-function(x) {(x -min(x))/(max(x)-min(x))}
+
+# normalizing the data
+travel_nor <- as.data.frame(mapply(under.sample[,c(1,4,5)], FUN =  nor))
+
+# adding categorical columns
+travel_nor$EmploymentType <- under.sample$Employment.Type
+travel_nor$GraduateOrNot <- under.sample$GraduateOrNot
+travel_nor$FrequentFlyer <- under.sample$FrequentFlyer
+travel_nor$EverTravelledAbroad <- under.sample$EverTravelledAbroad
+travel_nor$ChronicDiseases <- under.sample$ChronicDiseases
+travel_nor$TravelInsurance <- under.sample$TravelInsurance
+
+```
+
+```{r shuffling the dataset}
+set.seed(123)
+shuffle_index <- sample(1:nrow(travel_nor))
+travel_nor <- travel_nor[shuffle_index, ]
+head(travel_nor)
+
+```
+
+```{r Train Test Splits}
+set.seed(3456)
+ratio <- createDataPartition(travel_nor$TravelInsurance, p=.8, list=FALSE)
+train <- travel_nor[ratio, ]
+test <-travel_nor[-ratio, ]
+train.labels <- train$TravelInsurance
+test.labels <- test$TravelInsurance
+```
+
+### Logistic Regression
+
+```{r creating a logistic regression}
+logistic <- glm(TravelInsurance ~.,family=binomial(link="logit"), data=train)
+logistic
+```
+
+```{r summary statistics of the logistic regression}
+summary(logistic)
+```
+
+```{r making prediction}
+logistic.probs <- predict(logistic,type = "response", newdata = test)
+
+# Checking the first five probabilities
+head(logistic.probs)
+```
+
+```{r confusion matrix}
+
+logistic.pred <- ifelse(logistic.probs > 0.5, 1, 0)
+
+confusionMatrix(factor(logistic.pred), test$TravelInsurance, positive = "1")
+```
+
+```{r F1-Score}
+F1_Score(logistic.pred,test$TravelInsurance)
+Precision(logistic.pred,test$TravelInsurance)
+Recall(logistic.pred,test$TravelInsurance)
+```
+
+Attained an F1-Score of 74.0% which is fair balance between the
+Precision and Recall of the model. However, the recall is really low.
+
+### K Nearest Neighbors
+
+```{r Applying the Algorithm}
+
+knn1 <- knn(train = train,
+            test = test,
+            cl = train$TravelInsurance,
+            k = 10)
+
+
+# confusion Matrix
+
+confusionMatrix(knn1, test.labels, positive = "1")
+```
+
+```{r}
+# finding optimum k
+i = 1
+k.optm = 1
+for (i in 1:28){
+ knn.mod <- knn(train=train, test=test, cl=train.labels, k=i)
+ k.optm[i] <- 100 * sum(test.labels == knn.mod)/NROW(test.labels)
+ k=i
+ cat(k,'=',k.optm[i],'')
+}
+
+plot(k.optm, type="b", xlab="K- Value",ylab="Accuracy level")
+```
+
+```{r Optimizing k}
+trControl <- trainControl(method = "cv",
+                          number = 5)
+
+
+fit <- caret::train(TravelInsurance ~ .,
+             method = "knn",
+             tuneLength = 20,
+             trControl = trControl,
+             metric = "Accuracy",
+             data = train,
+             preProcess = c("center", "scale", "knnImpute"))
+fit
+```
+
+```{r fitting the better knn model}
+pred.knn <- predict(fit,test[,-9])
+
+confusionMatrix(pred.knn, test.labels, positive = "1")
+```
+
+#### Naive Bayes Model
+
+```{r Modeling and Evaluation}
+model <- naiveBayes(TravelInsurance~., data=train)
+
+
+# making predictions
+
+pred.nb <- predict(model, newdata=test)
+
+# confusion matrix
+
+confusionMatrix(pred.nb, test.labels, positive="1")
+```
+
+```{r cross validated}
+
+caret::train(TravelInsurance~.,
+             data= train,
+             metric = "Accuracy",
+             trControl  = trainControl(method="cv", number =10),
+             method = "nb")
+```
+
+```{r optimized Naive Bayes}
+nb2 <- naiveBayes(TravelInsurance~., data=train,
+           fL = 0,
+           useKernel = TRUE,
+           adjust = 1)
+
+pred.nb2 <- predict(nb2, newdata = test)
+confusionMatrix(pred.nb2, test.labels, positive = "1")
+```
+
+```{r}
+F1_Score(pred.nb2,test.labels)
+Precision(pred.nb2, test.labels)
+Recall(pred.nb2, test.labels)
+```
+
+Attained an F1-Score of 73.2% , Precision score was 81.69% and Recall
+score was 66.28%.
+
+### Unsupervised Learning
+
+#### Kmeans Clustering
+
+```{r }
+
+df <-travel_nor
+df$EmploymentType <- as.numeric(df$EmploymentType)
+df$ChronicDiseases <- as.numeric(df$ChronicDiseases)
+df$GraduateOrNot <- as.numeric(df$GraduateOrNot)
+df$FrequentFlyer <- as.numeric(df$FrequentFlyer)
+df$EverTravelledAbroad <- as.numeric(df$EverTravelledAbroad)
+
+```
+
+```{r Clustering}
+k2 <- kmeans(df[, -9], centers = 2, nstart = 25)
+k2$size
+```
+
+```{r }
+fviz_cluster(k2, data=df[ -9])
+```
+
+```{r}
+fviz_nbclust(df[,-9], kmeans, method="wss")
+```
+
+```{r silhouette method}
+fviz_nbclust(df[,-9], kmeans, method="silhouette")
+```
+
+```{r Gap Statistic}
+
+gap_stat <- clusGap(df[,-9], FUN = kmeans, nstart = 25,
+                    K.max = 10, B = 50)
+fviz_gap_stat(gap_stat)
+
+```
+
+```{r optimum k}
+k3 <- kmeans(df[,-9] ,centers = 7, nstart = 25)
+
+
+# plotting the results
+fviz_cluster(k3, data=df[ -9])
+```
+
+#### Hierarchical clustering
+
+```{r random sampling}
+ran <- sample(1:nrow(df),0.03 * nrow(df))
+
+j <- df[ran,]
+```
+
+```{r hierarchical clustering}
+
+# dissimilarity matrix
+d <- dist(j[, -9], method="euclidean")
+
+# hierarchical
+hc1 <- hclust(d, method = "complete")
+
+# plot dendogram
+plot(hc1, cex = 0.6, hang = -1)
+```
+
+```{r Assessing the different linkage methods}
+
+# methods to assess
+m <- c( "average", "single", "complete", "ward")
+
+names(m) <- c( "average", "single", "complete", "ward")
+
+# function to compute coefficient
+ac <- function(x) {
+  agnes(j, method = x)$ac
+}
+
+map_dbl(m,ac)
+```
+
+```{r Implementing the best linkage method}
+# dissimilarity matrix
+d <- dist(j[, -9], method="euclidean")
+
+# hierarchical
+hc1 <- hclust(d, method = "ward.D2")
+
+# plot dendogram
+plot(hc1, cex = 0.6, hang = -1)
+
+rect.hclust(hc1, k = 7, border = 2:5)
+
+```
+
+```{r}
+#colMeans(df)
+sapply(df, class)
+```
+
+## Challenging the Solution
+
+```{r}
+prun <- rpart(TravelInsurance ~ .,
+               data = train.d,
+               method ='class',
+              control = rpart.control(cp = 0, maxdepth = 8,minsplit = 100))
+
+rpart.plot(prun, extra = 106)
+
+```
+
+```{r}
+#making predictions
+pred.prun <- predict(prun,newdata = test.d[,-9])
+
+
+
+pred.cp <- ifelse(argmax(pred.prun, row=TRUE)==1, FALSE, TRUE)
+pred.cp <- factor(pred.cp)
+
+# confusion matrix
+confusionMatrix(pred.cp,test.d$TravelInsurance, positive = "TRUE")
+
+```
+
+```{r Model metrics}
+F1_Score(pred.cp,test.d$TravelInsurance)
+Precision(pred.cp, test.d$TravelInsurance)
+Recall(pred.cp, test.d$TravelInsurance)
+```
+
+Attained an F1-Score of 81.55% , Precision score was 96.48% and Recall
+score was 70.62%.
+
+
+
+## Conclusions
+
+From our bivariate analysis
+
+Age versus Insurance plot - At 25, there are more people taking the
+cover. At 28, a lot more people opt not to take the cover. It could be
+attributed to the ending of parental insurance cover and since many
+people are starting families at this age they could choose to not take
+the cover(median age for first birth in India is 25- 49 years.
+
+Annual Income and Age plot - At 25 years they are paid more, with a
+sharp decline at 27 years it then fluctuates from 27 to 35 years.
+
+Family members versus insurance plot - For 2 and 3 family sizes, there
+are a roughly equal number of people taking and rejecting the cover. At
+4, more people are not taking the insurance cover then around 5 to 9
+more customers are taking the cover.
+
+Annual Income versus FrequentFlyer plot - From our scatterplot we can
+see that the the people with a higher income are the ones who are most
+frequent flyers.
+
+Employment Type versus Annual Income plot - In the government sector,
+there is an equal number of people taking and not taking the insurance
+cover whereas in the private sector people taking insurance are slightly
+higher than those not taking the cover. Moreover, those taking the
+insurance cover are also paid slightly more.
+
+-   Our best performing model was Decision tree with an F1-Score of
+    81.54%.
+
+-   The model performance for the other models were as follows:
+    1)Logistic regression 74..84% 2)Naive Bayes 73.18%
+
+-   We performed decision tree pruning but the models accuracy remained
+    the same as the trees were not overgrown
+
+-   We identified the best features for the dataset to be
+    AnnualIncome,EverTravelledAbroad ,FamilyMembers, Age and
+    FrequentFlyer
+
+## Recommendations
+
+-   The following are our recommendations :
+
+-   To offer a family package alongside the individual packages
+    considering the fact that people aged 26 to 30 seem to be having
+    bigger priorities due to a growing number of dependents. This could
+    either be from starting families or having relatives who are
+    depending on their success.
+
+-   To create a more affordable package that targets the low income
+    earners given that the data suggests that travel insurance might not
+    be a priority to target this demographic.
+
+-   Create market awareness on the associated travelling risks and hence
+    the need for travel insurance to the first time flyers which is a
+    move that might increase the sales of the insurance package.
+
+-   Create a more encompassing medical scope in the package to include
+    more chronic diseases given that the data shows a high count of
+    people with an age of 27 to 29 have chronic diseases yet opt out of
+    travel insurance.
+
+-   The company could put effort to build their brand awareness as a
+    tour and travel agency so that they can increase their market
+    acceptance.
